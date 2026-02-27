@@ -1,0 +1,12 @@
+{
+  "name": "board-forge",
+  "private": true,
+  "scripts": {
+    "lint": "pnpm -r run lint",
+    "format": "pnpm -r run format"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.32.0",
+    "oxlint": "~1.47.0"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "oxfmt .",
+    "play": "tsx src/play.ts"
+  },
+  "dependencies": {
+    "@board-forge/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@tsconfig/node24": "^24.0.4",
+    "@types/node": "^24.10.13",
+    "oxfmt": "^0.32.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3"
+  }
+}

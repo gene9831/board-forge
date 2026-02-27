@@ -1,0 +1,17 @@
+{
+  "extends": "@tsconfig/node24/tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true
+  },
+  "include": ["src"]
+}

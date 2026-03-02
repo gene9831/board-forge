@@ -56,10 +56,14 @@ export interface BaseGameState<Item = unknown, Phase = string> {
   turn: number
   /** Name of the current phase (e.g. "draw", "action", "scoring"). */
   phase: Phase
+  /** Optional: set by phase-driven games; true after the current phase's onEnter has run. */
+  phaseEntered?: boolean
   /** Mapping from zone id to zone contents. */
   zones: Record<string, Zone<Item>>
   /** Optional mapping from player id to score, when scoring is defined. */
   scores?: Record<PlayerId, number>
+  /** Optional: serializable RNG state for phase-driven games that use randomness in onEnter. */
+  rngState?: RngState
 }
 
 /** Generic game action: discriminated by type, emitted by a player, with optional payload. */
@@ -101,22 +105,39 @@ export interface RandomSource {
   next(): number
 }
 
+/** A concrete executable action. */
+export interface ConcreteAction<A> {
+  kind: 'action'
+  value: A
+}
+
+/** A parameterized action template (needs resolution). */
+export interface TemplateAction<T> {
+  kind: 'template'
+  value: T
+}
+
+/** Legal action returned by rules. */
+export type LegalAction<A, T> =
+  | { kind: 'action'; value: A }
+  | (T extends never ? never : { kind: 'template'; value: T })
+
 /** Strategy for turning templates into concrete actions for a specific player. */
-export type ActionResolver<State, Action, TemplateAction = Action> = (args: {
+export type ActionResolver<State, Action, TemplateAction> = (args: {
   state: State
   player: PlayerId
   actingSet: ActingSet
-  templates: (Action | TemplateAction)[]
+  legalActions: LegalAction<Action, TemplateAction>[]
 }) => Action | null
 
 /** Phase definition for phase-driven games. */
-export interface PhaseDefinition<Phase, State, Action, TemplateAction = Action> {
+export interface PhaseDefinition<Phase, State, Action, TemplateAction = never> {
   /** Unique name of this phase (must match values used in state). */
   name: Phase
   /** Who may act in this phase and with what semantics. */
   getActingSet(state: State): ActingSet
   /** All legal actions (or templates) available to the given player in the given state. */
-  getLegalActions(state: State, player: PlayerId): (Action | TemplateAction)[]
+  getLegalActions(state: State, player: PlayerId): LegalAction<Action, TemplateAction>[]
   /** Optional hook invoked when entering this phase. */
   onEnter?(state: State, rng: RandomSource): State
   /** Optional hook invoked when exiting this phase. */
@@ -130,9 +151,9 @@ export interface PhaseDefinition<Phase, State, Action, TemplateAction = Action> 
 /** Top-level game protocol: one entry for all games. */
 export interface GameDefinition<
   Config extends GameConfig,
-  State,
+  State extends BaseGameState,
   Action,
-  TemplateAction = Action,
+  TemplateAction = never,
   ViewState = State,
 > {
   /** Build the initial state for a new game with the given config. */
@@ -140,7 +161,7 @@ export interface GameDefinition<
   /** Who may act in the current state and with what semantics. */
   getActingSet(state: State): ActingSet
   /** Compute legal actions (or templates) for the given player in the given state. */
-  getLegalActions(state: State, player: PlayerId): (Action | TemplateAction)[]
+  getLegalActions(state: State, player: PlayerId): LegalAction<Action, TemplateAction>[]
   /** Apply a concrete action to the state and return the updated state. */
   applyAction(state: State, action: Action): State
   /** Whether the game has reached a terminal (finished) state. */
@@ -152,4 +173,10 @@ export interface GameDefinition<
    * This is used to hide private information while preserving rules.
    */
   projectState(state: State, viewer: PlayerId): ViewState
+  /**
+   * Optional: phase definitions for phase-driven games. When present, runGame
+   * will automatically advance phases (onEnter, isComplete, onExit, nextPhase).
+   * When absent, the game is treated as simple (no phase advancement).
+   */
+  phases?: Record<State['phase'], PhaseDefinition<State['phase'], State, Action, TemplateAction>>
 }

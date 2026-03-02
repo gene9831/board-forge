@@ -1,5 +1,4 @@
 import {
-  advanceCaboPhases,
   caboGameDefinition,
   runGame,
   type ActionResolver,
@@ -81,21 +80,18 @@ function formatCaboState(state: CaboState): string {
   return lines.join('\n')
 }
 
-const resolver: ActionResolver<CaboState, CaboAction, CaboTemplateAction> = (args: {
-  state: CaboState
-  player: PlayerId
-  actingSet: import('@board-forge/core').ActingSet
-  templates: (CaboAction | CaboTemplateAction)[]
-}) => {
-  const { state, player, actingSet, templates } = args
+const resolver: ActionResolver<CaboState, CaboAction, CaboTemplateAction> = (args) => {
+  const { state, player, actingSet, legalActions } = args
   // Only resolve actions during the peek phase.
   if (state.phase !== 'peek') return null
   if (actingSet.type === 'none') return null
 
-  const template = templates.find(
-    (a: CaboAction | CaboTemplateAction) => a.type === 'setup-peek-template',
-  )
-  if (!template || template.payload?.requiredCards !== 2) {
+  const templateItem = legalActions.find((a) => a.kind === 'template')
+  if (!templateItem || templateItem.value.type !== 'setup-peek-template') {
+    return null
+  }
+  const template = templateItem.value
+  if (template.payload?.requiredCards !== 2) {
     return null
   }
 
@@ -126,6 +122,6 @@ const resolver: ActionResolver<CaboState, CaboAction, CaboTemplateAction> = (arg
 }
 
 const initial: CaboState = caboGameDefinition.createInitialState({ playerIds, seed: 42 })
-const state: CaboState = runGame(caboGameDefinition, initial, advanceCaboPhases, resolver)
+const state: CaboState = runGame(caboGameDefinition, initial, resolver)
 
 console.log(formatCaboState(state))

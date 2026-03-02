@@ -4,7 +4,6 @@
 
 export * from './abstract.ts'
 export {
-  advanceCaboPhases,
   caboGameDefinition,
   type CaboAction,
   type CaboCard,

@@ -4,18 +4,21 @@
 
 import { produce } from 'immer'
 import type {
+  ActingSet,
   BaseGameState,
   GameAction,
   GameConfig,
   GameDefinition,
+  LegalAction,
   PhaseDefinition,
   PlayerId,
   RandomSource,
   RngState,
+  TemplateAction,
   Zone,
-} from '../abstract.ts'
-import { deckOps } from '../deck-ops.ts'
-import { createRandomSource, createRngState } from '../rng.ts'
+} from './abstract.ts'
+import { deckOps } from './deck-ops.ts'
+import { createRngState } from './rng.ts'
 
 /** Cabo card with stable id and numeric value. */
 export interface CaboCard {
@@ -31,8 +34,6 @@ export interface CaboState extends BaseGameState<CaboCard, CaboPhase> {
   seed: number
   /** Serializable RNG state used to drive phase-level randomness. */
   rngState: RngState
-  /** Whether the current phase's onEnter hook has already been executed. */
-  phaseEntered: boolean
   /** Players who have completed their initial peek of two cards. */
   peekedPlayers: Record<PlayerId, boolean>
 }
@@ -166,38 +167,38 @@ const setupCabo = (state: CaboState, rng: RandomSource): CaboState => {
 const phases: Record<CaboPhase, CaboPhaseDefinition> = {
   setup: {
     name: 'setup',
-    getActingSet() {
+    getActingSet(): ActingSet {
       // Setup-only: no one may act.
       return { type: 'none' }
     },
-    getLegalActions() {
+    getLegalActions(): LegalAction<CaboSetupPeekAction, CaboSetupPeekTemplateAction>[] {
       // No actions are available in setup phase.
       return []
     },
-    onEnter(state, rng) {
+    onEnter(state, rng): CaboState {
       return setupCabo(state, rng)
     },
-    onExit(state) {
-      return state
-    },
-    isComplete() {
+    isComplete(): boolean {
       // Setup completes immediately after dealing.
       return true
     },
-    nextPhase() {
+    nextPhase(): CaboPhase {
       return 'peek'
     },
   },
   peek: {
     name: 'peek',
-    getActingSet(state) {
+    getActingSet(state): ActingSet {
       const pending = state.players.filter((id) => !state.peekedPlayers[id])
       if (pending.length === 0) {
         return { type: 'none' }
       }
       return { type: 'simultaneous', players: pending }
     },
-    getLegalActions(state, player: PlayerId) {
+    getLegalActions(
+      state,
+      player: PlayerId,
+    ): LegalAction<CaboSetupPeekAction, CaboSetupPeekTemplateAction>[] {
       if (state.peekedPlayers[player]) {
         return []
       }
@@ -211,93 +212,47 @@ const phases: Record<CaboPhase, CaboPhaseDefinition> = {
 
       // 返回一个模板 action，描述“该玩家此时可以进行一次初始 peek，且必须精确选择两张牌”；
       // 具体选择哪两张牌由调用方决定，并构造 type 为 'setup-peek' 的 concrete action。
-      return [
-        {
+      const template: TemplateAction<CaboSetupPeekTemplateAction> = {
+        kind: 'template',
+        value: {
           type: 'setup-peek-template',
           player,
           payload: {
             requiredCards: 2,
           },
         },
-      ]
+      }
+      return [template]
     },
-    isComplete(state) {
+    isComplete(state): boolean {
       return state.players.every((id) => state.peekedPlayers[id])
     },
-    nextPhase() {
+    nextPhase(): CaboPhase {
       return 'ended'
     },
   },
   ended: {
     name: 'ended',
-    getActingSet() {
+    getActingSet(): ActingSet {
       // Terminal phase: no further actions.
       return { type: 'none' }
     },
-    getLegalActions() {
+    getLegalActions(): LegalAction<CaboSetupPeekAction, CaboSetupPeekTemplateAction>[] {
       return []
     },
-    isComplete() {
+    isComplete(): boolean {
       // Remain in ended; game termination is handled by isTerminal.
       return true
     },
-    nextPhase() {
+    nextPhase(): CaboPhase {
       return 'ended'
     },
   },
 }
 
-const getCurrentPhase = (state: CaboState): CaboPhaseDefinition => {
-  const phase = phases[state.phase]
-
-  if (!phase) {
-    throw new Error(`Unknown phase: ${state.phase}`)
-  }
-
-  return phase
-}
-
-/** Advance through automatically-completing phases (e.g. setup → peek). */
-export const advanceCaboPhases = (state: CaboState): CaboState =>
-  produce(state, (draft) => {
-    // 安全上限：防止 phase 配置错误时出现无限循环（例如 nextPhase 形成环且 isComplete 始终为 true）。
-    for (let i = 0; i < 8; i++) {
-      const phase = getCurrentPhase(draft)
-
-      // 首次进入某个 phase 时，如果定义了 onEnter，就调用一次。
-      if (!draft.phaseEntered && phase.onEnter) {
-        const rng = createRandomSource(draft.rngState)
-        const nextState = phase.onEnter(draft, rng)
-        const updatedRngState = rng.state()
-
-        Object.assign(draft, nextState)
-        draft.rngState = updatedRngState
-        draft.phaseEntered = true
-      }
-
-      // 当前 phase 尚未完成时不再推进
-      if (!phase.isComplete(draft)) {
-        break
-      }
-
-      // 即将离开当前 phase，如果定义了 onExit，就调用一次。
-      if (phase.onExit) {
-        const nextState = phase.onExit(draft)
-        Object.assign(draft, nextState)
-      }
-
-      const nextPhase = phase.nextPhase(draft)
-      if (nextPhase === draft.phase) {
-        break
-      }
-
-      draft.phase = nextPhase
-      draft.phaseEntered = false
-    }
-  })
-
-/** Cabo GameDefinition – only setup is meaningful for now. */
+/** Cabo GameDefinition – phases live on the definition so runGame advances them automatically. */
 export const caboGameDefinition: CaboGameDefinition = {
+  phases,
   createInitialState(config): CaboState {
     const seed = config.seed ?? Date.now()
 
@@ -316,13 +271,15 @@ export const caboGameDefinition: CaboGameDefinition = {
   },
 
   getActingSet(state) {
-    const phase = getCurrentPhase(state)
-    return phase.getActingSet(state)
+    const phaseDef = this.phases?.[state.phase]
+    if (!phaseDef) throw new Error(`Unknown phase: ${state.phase}`)
+    return phaseDef.getActingSet(state)
   },
 
   getLegalActions(state, player) {
-    const phase = getCurrentPhase(state)
-    return phase.getLegalActions(state, player)
+    const phaseDef = this.phases?.[state.phase]
+    if (!phaseDef) throw new Error(`Unknown phase: ${state.phase}`)
+    return phaseDef.getLegalActions(state, player)
   },
 
   applyAction(state, action) {

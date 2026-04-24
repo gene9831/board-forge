@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "id": "minimal",
+    "name": "Minimal Demo",
+    "version": "1.0.0",
+    "description": "Bootstrap demo: join / start_game / custom via declarative effects.",
+    "authors": [
+      "board-forge"
+    ]
+  },
+  "config": {
+    "table": {
+      "zone": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 1600,
+        "maxY": 900
+      }
+    },
+    "board": {
+      "spawn": {
+        "x": 200,
+        "y": 200
+      },
+      "rotation": 0,
+      "layer": 0
+    }
+  },
+  "scripts": {
+    "global": "function OnLoad()\n  local z = GameConfig.table.zone\n  return {\n    effects = {\n      { type = \"define_zone\", id = \"table\", minX = z.minX, minY = z.minY, maxX = z.maxX, maxY = z.maxY },\n    },\n  }\nend\n\nfunction HandleIntent(intent)\n  local t = intent.type\n  local playerId = intent.playerId\n\n  if t == \"join\" then\n    local name = \"\"\n    if intent.payload and intent.payload.displayName then\n      name = intent.payload.displayName\n    end\n    return {\n      ok = true,\n      effects = {\n        {\n          type = \"ensure_player\",\n          playerId = playerId,\n          displayName = name,\n        },\n        {\n          type = \"broadcast\",\n          message = playerId .. \" joined\",\n        },\n      },\n    }\n  end\n\n  if t == \"start_game\" then\n    local sp = GameConfig.board.spawn\n    return {\n      ok = true,\n      effects = {\n        {\n          type = \"spawn_object\",\n          objectKind = \"table_board\",\n          x = sp.x,\n          y = sp.y,\n          rotation = GameConfig.board.rotation,\n          layer = GameConfig.board.layer,\n          tags = { \"board\" },\n        },\n        { type = \"set_phase\", phase = \"playing\" },\n        { type = \"set_turn_player\", playerId = playerId },\n        { type = \"broadcast\", message = \"Game started\" },\n      },\n    }\n  end\n\n  if t == \"custom\" then\n    local msg = \"custom\"\n    if intent.payload and intent.payload.message then\n      msg = tostring(intent.payload.message)\n    end\n    return {\n      ok = true,\n      effects = {\n        { type = \"broadcast\", message = msg },\n      },\n    }\n  end\n\n  return { ok = false, reason = \"unknown intent: \" .. tostring(t) }\nend\n"
+  }
+}

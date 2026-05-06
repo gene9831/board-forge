@@ -1,0 +1,12 @@
+{
+  "name": "@board-forge/root",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @board-forge/frontend --filter @board-forge/server dev",
+    "dev:frontend": "pnpm --filter @board-forge/frontend dev",
+    "dev:server": "pnpm --filter @board-forge/server dev",
+    "build": "pnpm --filter @board-forge/server build && pnpm --filter @board-forge/frontend build"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

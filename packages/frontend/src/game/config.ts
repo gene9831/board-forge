@@ -1,0 +1,48 @@
+import type { GameState } from '@board-forge/shared'
+
+export const DEFAULT_NETWORK_RATE = 60
+
+export const INITIAL_GAME_STATE: GameState = {
+  board: {
+    width: 1280,
+    height: 720,
+  },
+  objects: [
+    {
+      id: '000001',
+      kind: 'square',
+      x: 120,
+      y: 120,
+      zIndex: 1,
+      fill: '#2563eb',
+      stroke: '#1e3a8a',
+      strokeWidth: 3,
+      size: 80,
+      borderRadius: 0,
+    },
+    {
+      id: '000002',
+      kind: 'rectangle',
+      x: 320,
+      y: 120,
+      zIndex: 2,
+      fill: '#f97316',
+      stroke: '#9a3412',
+      strokeWidth: 3,
+      width: 180,
+      height: 96,
+      borderRadius: 18,
+    },
+    {
+      id: '000003',
+      kind: 'circle',
+      x: 620,
+      y: 120,
+      zIndex: 3,
+      fill: '#16a34a',
+      stroke: '#166534',
+      strokeWidth: 3,
+      radius: 52,
+    },
+  ],
+}
